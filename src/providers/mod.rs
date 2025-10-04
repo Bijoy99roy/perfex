@@ -7,4 +7,5 @@ pub trait LLMProvider {
     async fn chat_stream(&self, prompt: &str) -> Result<()>;
 }
 
+pub mod gemini;
 pub mod openai;
