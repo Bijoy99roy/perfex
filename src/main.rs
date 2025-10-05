@@ -7,11 +7,12 @@ use gemini_rust::Model;
 use inquire::{Select, Text};
 use providers::{LLMProvider, openai::OpenAIClient};
 
-use crate::providers::gemini::GeminiProvider;
+use crate::providers::{gemini::GeminiProvider, groq::GroqProvider};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let provider = Select::new("Select Model Provider:", vec!["OpenAI", "Gemini"]).prompt()?;
+    let provider =
+        Select::new("Select Model Provider:", vec!["OpenAI", "Gemini", "Groq"]).prompt()?;
 
     let client: Box<dyn LLMProvider + Send + Sync> = match provider {
         "OpenAI" => {
@@ -39,6 +40,18 @@ async fn main() -> Result<()> {
                 Model::Gemini25FlashLite,
             ))
         }
+        "Groq" => {
+            let groq_api_key = match env::var("GROQ_API_KEY") {
+                Ok(val) => val,
+                Err(_) => {
+                    eprintln!(
+                        "ERROR: GROQ_API_KEY is missing. Please set it before running the program."
+                    );
+                    process::exit(1);
+                }
+            };
+            Box::new(GroqProvider::new(&groq_api_key, "llama-3.3-70b-versatile"))
+        }
         _ => unreachable!(),
     };
 
@@ -47,7 +60,6 @@ async fn main() -> Result<()> {
         if prompt.to_lowercase() == "exit" {
             break;
         }
-        println!("{}", Model::Gemini25FlashLite.to_string());
         let response = client.chat_stream(&prompt).await?;
         // println!("\n>>> Resposne: \n{}\n", response);
     }

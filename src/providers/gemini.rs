@@ -57,7 +57,7 @@ impl LLMProvider for GeminiProvider {
             std::io::stdout().flush().unwrap();
         }
 
-        println!();
+        println!("\n");
         Ok(())
     }
 }

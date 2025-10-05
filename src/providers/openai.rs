@@ -68,7 +68,7 @@ impl LLMProvider for OpenAIClient {
                 Err(err) => eprintln!("Stream error: {err}"),
             }
         }
-        println!();
+        println!("\n");
         Ok(())
     }
 }
