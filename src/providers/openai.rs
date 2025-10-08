@@ -4,7 +4,7 @@ use async_openai::Client;
 use async_openai::config::OpenAIConfig;
 use async_openai::types::{
     ChatCompletionRequestMessage, ChatCompletionRequestUserMessageArgs,
-    CreateChatCompletionRequestArgs,
+    CreateChatCompletionRequestArgs, CreateEmbeddingRequestArgs,
 };
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -58,7 +58,7 @@ impl LLMProvider for OpenAIClient {
         while let Some(result) = stream.next().await {
             match result {
                 Ok(chunk) => {
-                    println!("printing chunk: {:?}", chunk);
+                    // println!("printing chunk: {:?}", chunk);
                     if let Some(content) = &chunk.choices[0].delta.content {
                         print!("{}", content);
                         use std::io::Write;
@@ -70,5 +70,16 @@ impl LLMProvider for OpenAIClient {
         }
         println!("\n");
         Ok(())
+    }
+
+    async fn embed(&self, inputs: Vec<String>) -> Result<Vec<Vec<f32>>> {
+        let requests = CreateEmbeddingRequestArgs::default()
+            .model("text-embedding-3-small")
+            .input(inputs)
+            .build()?;
+
+        let response = self.client.embeddings().create(requests).await?;
+
+        Ok(response.data.into_iter().map(|d| d.embedding).collect())
     }
 }

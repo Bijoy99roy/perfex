@@ -60,6 +60,15 @@ async fn main() -> Result<()> {
         if prompt.to_lowercase() == "exit" {
             break;
         }
+        let multiple_embeddings = client
+            .embed(vec!["Hello world".to_string(), "How are you?".to_string()])
+            .await?;
+
+        println!(
+            "Got {} embeddings. 1st 10 values: {:?}",
+            multiple_embeddings.len(),
+            &multiple_embeddings[0][..multiple_embeddings[0].len().min(10)]
+        );
         let response = client.chat_stream(&prompt).await?;
         // println!("\n>>> Resposne: \n{}\n", response);
     }
