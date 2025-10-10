@@ -25,7 +25,6 @@ pub fn prepare_data(
     titles: Vec<&str>,
     embeddings: Vec<Vec<f32>>,
     dims: i32,
-    schema: Arc<Schema>,
 ) -> Vec<RecordBatch> {
     let ids_list = Arc::new(StringArray::from(ids)) as ArrayRef;
     let content_list = Arc::new(StringArray::from(contents)) as ArrayRef;
