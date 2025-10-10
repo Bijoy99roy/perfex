@@ -1,5 +1,5 @@
 mod providers;
-
+mod vectordb;
 use std::{env, process};
 
 use anyhow::Result;
