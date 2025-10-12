@@ -1,3 +1,4 @@
+mod document_reader;
 mod providers;
 mod vectordb;
 use std::{env, process};
@@ -7,10 +8,14 @@ use gemini_rust::Model;
 use inquire::{Select, Text};
 use providers::{LLMProvider, openai::OpenAIClient};
 
-use crate::providers::{gemini::GeminiProvider, groq::GroqProvider};
+use crate::{
+    document_reader::pdf::read_pdf,
+    providers::{gemini::GeminiProvider, groq::GroqProvider},
+    vectordb::lancedb::{create_table, execute_query, make_schema, prepare_data},
+};
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let provider =
         Select::new("Select Model Provider:", vec!["OpenAI", "Gemini", "Groq"]).prompt()?;
 
@@ -71,6 +76,37 @@ async fn main() -> Result<()> {
         );
         let response = client.chat_stream(&prompt).await?;
         // println!("\n>>> Resposne: \n{}\n", response);
+
+        // Test data ingestion with dummy data
+        let dim = 4;
+        let schema = make_schema(dim);
+
+        let ids = vec!["A", "B", "C"];
+        let contents = vec!["Content A", "Content B", "Content C"];
+        let titles = vec!["T1", "T2", "T3"];
+
+        let embeddings = vec![
+            vec![0.1, 0.2, 0.3, 0.4],
+            vec![0.9, 0.8, 0.7, 0.6],
+            vec![0.4, 0.4, 0.4, 0.4],
+        ];
+
+        let batches = prepare_data(ids, contents, titles, embeddings, dim, schema.clone());
+        let table = create_table("./my_lancedb", "docs_embeddings", batches, schema).await?;
+
+        // Dummy embedding vector for testing
+        let query_vector = vec![0.6, 0.7, 0.8, 0.5];
+
+        let limit = 1;
+
+        let results = execute_query(&table, &query_vector, limit).await?;
+
+        for batch in results {
+            println!("{:?}", batch);
+        }
+
+        let pdf_data = read_pdf("src/client-rfp 1.pdf")?;
+        println!("Pdf content: \n {:?}", pdf_data);
     }
     Ok(())
 }
