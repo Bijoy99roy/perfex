@@ -1,5 +1,6 @@
 mod document_reader;
 mod providers;
+mod utils;
 mod vectordb;
 use std::{env, process};
 
@@ -11,6 +12,7 @@ use providers::{LLMProvider, openai::OpenAIClient};
 use crate::{
     document_reader::pdf::read_pdf,
     providers::{gemini::GeminiProvider, groq::GroqProvider},
+    utils::document_splitter,
     vectordb::lancedb::{create_table, execute_query, make_schema, prepare_data},
 };
 
@@ -107,6 +109,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let pdf_data = read_pdf("src/client-rfp 1.pdf")?;
         println!("Pdf content: \n {:?}", pdf_data);
+        let chunks = document_splitter(&[pdf_data], 200, 50);
+        println!("Chunks: {:?}", chunks);
     }
     Ok(())
 }

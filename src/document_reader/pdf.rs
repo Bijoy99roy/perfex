@@ -1,8 +1,8 @@
 use lopdf::Document;
 #[derive(Debug)]
 pub struct DocumentReader {
-    title: String,
-    contents: String,
+    pub title: String,
+    pub contents: String,
 }
 
 pub fn read_pdf(path: &str) -> Result<DocumentReader, Box<dyn std::error::Error>> {
