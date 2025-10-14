@@ -4893,6 +4893,7 @@ dependencies = [
  "lopdf",
  "shlex",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

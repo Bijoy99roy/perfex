@@ -27,9 +27,9 @@ pub fn make_schema(dims: i32) -> Arc<Schema> {
 }
 
 pub fn prepare_data(
-    ids: Vec<&str>,
-    contents: Vec<&str>,
-    titles: Vec<&str>,
+    ids: Vec<String>,
+    contents: Vec<String>,
+    titles: Vec<String>,
     embeddings: Vec<Vec<f32>>,
     dims: i32,
     schema: SchemaRef,
