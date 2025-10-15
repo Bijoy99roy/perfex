@@ -1,6 +1,7 @@
 mod document_reader;
 mod providers;
 mod rag;
+mod model;
 mod utils;
 mod vectordb;
 use std::{env, process};
@@ -16,66 +17,46 @@ use crate::{
     rag::prompts::contruct_propmt,
     utils::document_splitter,
     vectordb::lancedb::{create_table, execute_query, make_schema, prepare_data},
+    model::model_handler::load_model,
 };
 use arrow_array::{ArrayRef, FixedSizeListArray, Float32Array, StringArray};
+
+struct TaskModels {
+    llm: Box<dyn LLMProvider + Send + Sync>,
+    embedding: Option<Box<dyn LLMProvider + Send + Sync>>,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let provider =
-        Select::new("Select Model Provider:", vec!["OpenAI", "Gemini", "Groq"]).prompt()?;
+    let task_options =
+        Select::new("Select what you want to do:", vec!["LLM Query", "RAG"]).prompt()?;
+    
+    let models = match task_options {
+        "LLM Query"=>{
+            let provider =
+                Select::new("Select Model Provider:", vec!["OpenAI", "Gemini", "Groq"]).prompt()?;
+            let llm = load_model(&provider);
 
-    let client: Box<dyn LLMProvider + Send + Sync> = match provider {
-        "OpenAI" => {
-            if !env::var("OPENAI_API_KEY").is_ok() {
-                eprintln!(
-                    "ERROR: OPENAI_API_KEY is missing. Please set it before running the program."
-                );
-                process::exit(1);
-            }
-
-            Box::new(OpenAIClient::new("gpt-4o"))
-        }
-        "Gemini" => {
-            let gemini_api_key = match env::var("GEMINI_API_KEY") {
-                Ok(val) => val,
-                Err(_) => {
-                    eprintln!(
-                        "ERROR: GEMINI_API_KEY is missing. Please set it before running the program."
-                    );
-                    process::exit(1);
-                }
-            };
-            Box::new(GeminiProvider::new(
-                &gemini_api_key,
-                Model::Gemini25FlashLite,
-            ))
-        }
-        "Groq" => {
-            let groq_api_key = match env::var("GROQ_API_KEY") {
-                Ok(val) => val,
-                Err(_) => {
-                    eprintln!(
-                        "ERROR: GROQ_API_KEY is missing. Please set it before running the program."
-                    );
-                    process::exit(1);
-                }
-            };
-            Box::new(GroqProvider::new(&groq_api_key, "llama-3.3-70b-versatile"))
-        }
-        _ => unreachable!(),
+            TaskModels{ llm, embedding: None}
+        },
+        "RAG" => {
+            let provider =
+                Select::new("Select Model Provider:", vec!["OpenAI", "Gemini", "Groq"]).prompt()?;
+            let llm = load_model(&provider);
+            let embedding_provider = "OpenAI".to_string();
+            let embedding = load_model(&embedding_provider);
+            TaskModels{ llm, embedding: Some(embedding)}
+        },
+        _=> unreachable!(),
     };
-
-    loop {
-        let prompt = Text::new("Enter a prompt(type 'exit' to quit):").prompt()?;
-        if prompt.to_lowercase() == "exit" {
-            break;
-        }
-
+    
+ 
+    let (embedding_model, table) = if task_options == "RAG" {
         let pdf_data = read_pdf("src/client-rfp 1.pdf")?;
-        // println!("Pdf content: \n {:?}", pdf_data);
         let (chunks, titles, ids) = document_splitter(&[pdf_data], 1000, 50);
-        // println!("Chunks: {:?}", chunks);
 
-        let multiple_embeddings = client.embed(chunks.clone()).await?;
+        let embedding_model = models.embedding.as_ref().unwrap();
+        let multiple_embeddings: Vec<Vec<f32>> = embedding_model.embed(chunks.clone()).await?;
 
         println!(
             "Got {} embeddings. 1st 10 values: {:?}",
@@ -83,34 +64,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &multiple_embeddings[0][..multiple_embeddings[0].len().min(10)]
         );
 
-        // println!("\n>>> Resposne: \n{}\n", response);
-
-        // Test data ingestion with dummy data
         let dim = 1536;
         let schema = make_schema(dim);
 
-        // let ids = vec!["A", "B", "C"];
-        // let contents = vec!["Content A", "Content B", "Content C"];
-        // let titles = vec!["T1", "T2", "T3"];
-
-        // let embeddings = vec![
-        //     vec![0.1, 0.2, 0.3, 0.4],
-        //     vec![0.9, 0.8, 0.7, 0.6],
-        //     vec![0.4, 0.4, 0.4, 0.4],
-        // ];
-
-        let batches = prepare_data(
-            ids,
-            chunks,
-            titles,
-            multiple_embeddings,
-            dim,
-            schema.clone(),
-        );
+        let batches =
+            prepare_data(ids, chunks, titles, multiple_embeddings, dim, schema.clone());
         let table = create_table("./my_lancedb", "docs_embeddings", batches, schema).await?;
 
-        // Dummy embedding vector for testing
-        let query_vector = client.embed(vec![prompt.clone()]).await?;
+        (Some(embedding_model), Some(table))
+    } else {
+        (None, None)
+    };
+    loop {
+        let prompt = Text::new("Enter a prompt(type 'exit' to quit):").prompt()?;
+        if prompt.to_lowercase() == "exit" {
+            break;
+        }
+        match task_options{
+            "LLM Query"=>{
+            models.llm.chat_stream(&prompt).await?;
+        },
+        "RAG" => {
+            
+
+        // TODO: Fix this atrocious code in next before weekend
+        let embedding_model = embedding_model.as_ref().unwrap();
+        let table = table.as_ref().unwrap();
+        let query_vector:Vec<Vec<f32>> = embedding_model.embed(vec![prompt.clone()]).await?;
 
         let limit = 10;
 
@@ -133,7 +113,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         let final_prompt = contruct_propmt(&prompt, &context);
         println!("{}", &final_prompt);
-        let response = client.chat_stream(&final_prompt).await?;
+        let response = models.llm.chat_stream(&final_prompt).await?;
+        },
+        _=> unreachable!(),
+        }
+        
+
+        
     }
     Ok(())
 }
