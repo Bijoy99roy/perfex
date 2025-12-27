@@ -1,5 +1,3 @@
-# I hate rust docs, why is it so hard to understand!!!!
-
 # Perfex
 
 Perfex is a Rust based cli for experimenting with LLM providers (OpenAI, Gemini, Groq) and vector database operations using LanceDB providing RAG(Retrieval Augumented Generation) capabilities with local files.
